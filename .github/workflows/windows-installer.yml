@@ -1,0 +1,47 @@
+name: Windows installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install native build dependencies
+        shell: powershell
+        run: |
+          choco install tesseract --version 5.5.0.20241111 -y --no-progress
+          choco install innosetup -y --no-progress
+      - name: Build and test installer
+        shell: powershell
+        run: .\build\build_windows.ps1 -Python python
+      - name: Verify installer and bundled OCR
+        shell: powershell
+        run: |
+          $setup = Resolve-Path "release\LieferscheinSuche_Setup.exe"
+          $process = Start-Process $setup -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw "Installer exit code: $($process.ExitCode)" }
+          $install = Join-Path $env:ProgramFiles "LieferscheinSuche"
+          @(
+            "$install\LieferscheinSuche.exe",
+            "$install\_internal\ocr\tesseract.exe",
+            "$install\_internal\ocr\tessdata\deu.traineddata",
+            "$install\_internal\ocr\tessdata\eng.traineddata"
+          ) | ForEach-Object { if (-not (Test-Path $_)) { throw "Missing bundled file: $_" } }
+          $app = Start-Process "$install\LieferscheinSuche.exe" -PassThru
+          Start-Sleep -Seconds 8
+          if ($app.HasExited) { throw "Application exited during smoke test." }
+          Stop-Process -Id $app.Id -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LieferscheinSuche-Windows-Setup
+          path: release/LieferscheinSuche_Setup.exe
+          if-no-files-found: error
