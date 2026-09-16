@@ -14,7 +14,12 @@ if ($env:OS -ne "Windows_NT") {
 }
 
 if (-not (Test-Path ".venv\Scripts\python.exe")) {
-    & $Python -3.12 -m venv .venv
+    if ((Split-Path -Leaf $Python) -in @("py", "py.exe")) {
+        & $Python -3.12 -m venv .venv
+    } else {
+        & $Python -m venv .venv
+    }
+    if ($LASTEXITCODE -ne 0) { throw "Die virtuelle Python-Umgebung konnte nicht erstellt werden." }
 }
 $VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 & $VenvPython -m pip install --upgrade pip
