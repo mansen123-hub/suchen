@@ -5,6 +5,7 @@ __pycache__/
 build/vendor/
 dist/
 release/
+windows-artifact/
+LieferscheinSuche-Windows-Setup.zip
 *.sqlite3
 *.log
-
