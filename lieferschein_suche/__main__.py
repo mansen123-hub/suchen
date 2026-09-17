@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-import multiprocessing
 
 from PySide6.QtWidgets import QApplication
 
@@ -14,7 +13,6 @@ from .style import APP_STYLE
 
 
 def main() -> int:
-    multiprocessing.freeze_support()
     configure_logging()
     app = QApplication(sys.argv)
     app.setApplicationName("Lieferschein-Suche")
