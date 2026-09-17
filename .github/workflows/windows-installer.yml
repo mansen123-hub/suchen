@@ -38,6 +38,8 @@ jobs:
             "$install\_internal\ocr\tessdata\deu.traineddata",
             "$install\_internal\ocr\tessdata\eng.traineddata"
           ) | ForEach-Object { if (-not (Test-Path $_)) { throw "Missing bundled file: $_" } }
+          $selftest = Start-Process "$install\LieferscheinSuche.exe" -ArgumentList "--self-test" -PassThru -Wait
+          if ($selftest.ExitCode -ne 0) { throw "Packaged indexing self-test failed: $($selftest.ExitCode)" }
           $app = Start-Process "$install\LieferscheinSuche.exe" -PassThru
           Start-Sleep -Seconds 8
           if ($app.HasExited) { throw "Application exited during smoke test." }

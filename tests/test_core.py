@@ -102,3 +102,34 @@ def test_many_pdfs_and_existing_index_after_restart(tmp_path: Path) -> None:
     hits = reopened_database.search("BATCH-00017", normalize_search_text("BATCH-00017"))
     assert len(hits) == 1
     assert hits[0].filename == "Lieferung 17.pdf"
+
+
+def test_number_search_uses_dedicated_fast_index(tmp_path: Path) -> None:
+    pdf = tmp_path / "fast.pdf"
+    create_pdf(pdf, ["Lieferscheinnummer LS-2026-778899 mit ausreichend Textinhalt"])
+    database = IndexDatabase(tmp_path / "fast.sqlite3")
+    PdfIndexer(database, workers=2).run(tmp_path, recursive=False)
+    with database.connect() as conn:
+        conn.execute("UPDATE pages SET normalized_text='keinfallbacktreffer'")
+    hits = database.search("LS-2026-778899", normalize_search_text("LS-2026-778899"))
+    assert len(hits) == 1
+
+
+def test_targeted_update_does_not_rescan_folder(tmp_path: Path) -> None:
+    first = tmp_path / "first.pdf"
+    second = tmp_path / "second.pdf"
+    create_pdf(first, ["Lieferscheinnummer TARGET-10001 mit ausreichend Textinhalt"])
+    create_pdf(second, ["Lieferscheinnummer TARGET-20002 mit ausreichend Textinhalt"])
+    database = IndexDatabase(tmp_path / "targeted.sqlite3")
+    indexer = PdfIndexer(database, workers=2)
+    indexer.run(tmp_path, recursive=False)
+
+    first.unlink()
+    create_pdf(second, ["Lieferscheinnummer TARGET-30003 mit ausreichend Textinhalt"])
+    stat = second.stat()
+    os.utime(second, ns=(stat.st_atime_ns, stat.st_mtime_ns + 20_000_000))
+    result = indexer.run_paths([first, second])
+    assert result.removed == 1
+    assert result.processed == 1
+    assert database.search("TARGET-30003", normalize_search_text("TARGET-30003"))
+    assert not database.search("TARGET-10001", normalize_search_text("TARGET-10001"))

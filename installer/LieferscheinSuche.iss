@@ -1,5 +1,5 @@
 #define MyAppName "Lieferschein-Suche"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "LieferscheinSuche"
 #define MyAppExeName "LieferscheinSuche.exe"
 
@@ -48,4 +48,3 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{#MyAppName} starten"; Flags: n
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
-

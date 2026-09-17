@@ -4,7 +4,6 @@ import logging
 import os
 import subprocess
 import threading
-from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QThread, QTimer, Qt, Signal, Slot
@@ -46,18 +45,22 @@ class IndexWorker(QObject):
     finished = Signal(object)
     failed = Signal(str)
 
-    def __init__(self, indexer: PdfIndexer, root: Path, recursive: bool, rebuild: bool):
+    def __init__(self, indexer: PdfIndexer, root: Path, recursive: bool, rebuild: bool, paths: list[str] | None = None):
         super().__init__()
         self.indexer = indexer
         self.root = root
         self.recursive = recursive
         self.rebuild = rebuild
+        self.paths = paths
         self.cancel_event = threading.Event()
 
     @Slot()
     def run(self) -> None:
         try:
-            result = self.indexer.run(self.root, self.recursive, self.rebuild, self.progress.emit, self.cancel_event)
+            if self.paths is None:
+                result = self.indexer.run(self.root, self.recursive, self.rebuild, self.progress.emit, self.cancel_event)
+            else:
+                result = self.indexer.run_paths(self.paths, self.progress.emit, self.cancel_event)
             self.finished.emit(result)
         except Exception as exc:
             LOGGER.exception("Indexierung konnte nicht gestartet werden")
@@ -69,7 +72,7 @@ class IndexWorker(QObject):
 
 
 class MainWindow(QMainWindow):
-    watcher_change = Signal()
+    watcher_change = Signal(object)
 
     def __init__(self, database: IndexDatabase, settings: AppSettings):
         super().__init__()
@@ -80,8 +83,9 @@ class MainWindow(QMainWindow):
         self.index_thread: QThread | None = None
         self.index_worker: IndexWorker | None = None
         self.current_hits: list[SearchHit] = []
+        self._pending_watch_paths: set[str] = set()
         self._closing = False
-        self.watcher_change.connect(lambda: self._start_index(False))
+        self.watcher_change.connect(self._handle_watch_paths)
 
         self.setWindowTitle(f"Lieferschein-Suche {__version__}")
         self.resize(settings.window_width, settings.window_height)
@@ -237,7 +241,7 @@ class MainWindow(QMainWindow):
             self._save_settings()
             self._configure_watcher()
 
-    def _start_index(self, rebuild: bool) -> None:
+    def _start_index(self, rebuild: bool, paths: list[str] | None = None) -> None:
         if self.index_thread:
             return
         folder = Path(self.folder_edit.text().strip())
@@ -246,7 +250,7 @@ class MainWindow(QMainWindow):
             return
         self._save_settings()
         thread = QThread(self)
-        worker = IndexWorker(self.indexer, folder, self.subfolders.isChecked(), rebuild)
+        worker = IndexWorker(self.indexer, folder, self.subfolders.isChecked(), rebuild, paths)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.progress.connect(self._on_progress)
@@ -261,15 +265,25 @@ class MainWindow(QMainWindow):
         self.start_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self.progress.setRange(0, 0)
-        self.progress_label.setText("PDF-Dateien werden gesucht …")
+        self.progress_label.setText("PDF-Dateien werden gesucht …" if paths is None else f"{len(paths)} geänderte Dateien werden aktualisiert …")
         self.watcher.stop()
         thread.start()
 
     @Slot(object)
     def _on_progress(self, state: IndexProgress) -> None:
-        self.progress.setRange(0, max(state.total, 1))
+        if state.total <= 0:
+            self.progress.setRange(0, 0)
+        else:
+            self.progress.setRange(0, state.total)
         self.progress.setValue(state.current)
-        self.progress_label.setText(f"{state.message}\n{state.filename}".strip())
+        details = state.filename
+        if state.files_per_second > 0 and state.total > state.current:
+            remaining = int((state.total - state.current) / state.files_per_second)
+            hours, remainder = divmod(remaining, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            eta = f"{hours:d}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes:d}:{seconds:02d}"
+            details = f"{state.current:,}/{state.total:,} · {state.files_per_second:.1f} PDFs/s · Rest ca. {eta}"
+        self.progress_label.setText(f"{state.message}\n{details}".strip())
 
     @Slot(object)
     def _on_index_finished(self, result: IndexResult) -> None:
@@ -299,6 +313,10 @@ class MainWindow(QMainWindow):
         if thread:
             thread.deleteLater()
         self._configure_watcher()
+        if self._pending_watch_paths and not self._closing:
+            pending = sorted(self._pending_watch_paths)
+            self._pending_watch_paths.clear()
+            QTimer.singleShot(0, lambda: self._start_index(False, pending))
         if self._closing:
             QTimer.singleShot(0, self.close)
 
@@ -362,8 +380,15 @@ class MainWindow(QMainWindow):
         if answer == QMessageBox.StandardButton.Yes:
             self._start_index(True)
 
-    def _watcher_triggered(self) -> None:
-        self.watcher_change.emit()
+    def _watcher_triggered(self, paths: list[str]) -> None:
+        self.watcher_change.emit(paths)
+
+    @Slot(object)
+    def _handle_watch_paths(self, paths: list[str]) -> None:
+        if self.index_thread:
+            self._pending_watch_paths.update(paths)
+        else:
+            self._start_index(False, paths)
 
     def _configure_watcher(self) -> None:
         self.watcher.stop()

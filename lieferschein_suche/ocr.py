@@ -64,6 +64,8 @@ def ocr_page(page: fitz.Page, languages: str = "deu+eng", dpi: int = 300) -> tup
         image_path = Path(temporary) / "page.png"
         pixmap.save(str(image_path))
         env = os.environ.copy()
+        # Each PDF worker runs its own Tesseract process. Keep one OCR process to one CPU thread.
+        env.setdefault("OMP_THREAD_LIMIT", "1")
         tessdata = executable.parent / "tessdata"
         if tessdata.is_dir():
             env["TESSDATA_PREFIX"] = str(tessdata)
