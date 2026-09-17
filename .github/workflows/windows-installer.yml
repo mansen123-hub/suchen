@@ -38,7 +38,15 @@ jobs:
             "$install\_internal\ocr\tessdata\deu.traineddata",
             "$install\_internal\ocr\tessdata\eng.traineddata"
           ) | ForEach-Object { if (-not (Test-Path $_)) { throw "Missing bundled file: $_" } }
-          $selftest = Start-Process "$install\LieferscheinSuche.exe" -ArgumentList "--self-test" -PassThru -Wait
+          $selftestLog = Join-Path $env:TEMP "LieferscheinSuche_selftest.log"
+          Remove-Item $selftestLog -Force -ErrorAction SilentlyContinue
+          $selftest = Start-Process "$install\LieferscheinSuche.exe" -ArgumentList "--self-test" -PassThru
+          if (-not $selftest.WaitForExit(60000)) {
+            Stop-Process -Id $selftest.Id -Force -ErrorAction SilentlyContinue
+            if (Test-Path $selftestLog) { Get-Content $selftestLog }
+            throw "Packaged indexing self-test exceeded 60 seconds."
+          }
+          if (Test-Path $selftestLog) { Get-Content $selftestLog }
           if ($selftest.ExitCode -ne 0) { throw "Packaged indexing self-test failed: $($selftest.ExitCode)" }
           $app = Start-Process "$install\LieferscheinSuche.exe" -PassThru
           Start-Sleep -Seconds 8
