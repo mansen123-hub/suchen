@@ -1,5 +1,5 @@
 #define MyAppName "Lieferschein-Suche"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "LieferscheinSuche"
 #define MyAppExeName "LieferscheinSuche.exe"
 

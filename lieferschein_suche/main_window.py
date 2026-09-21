@@ -156,10 +156,10 @@ class MainWindow(QMainWindow):
         content = QWidget()
         main = QVBoxLayout(content)
         main.setContentsMargins(14, 2, 0, 0)
-        heading = QLabel("Lieferscheinnummer suchen")
+        heading = QLabel("Belegnummer aus Palettenkonto suchen")
         heading.setObjectName("sectionTitle")
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("z. B. LS-2026-001284")
+        self.search_edit.setPlaceholderText("z. B. 7239155")
         self.search_edit.setClearButtonEnabled(True)
         self.search_edit.returnPressed.connect(self._search)
         self.search_edit.textChanged.connect(self._search_delayed)
@@ -175,6 +175,13 @@ class MainWindow(QMainWindow):
         search_row.addWidget(search_button)
         main.addWidget(heading)
         main.addLayout(search_row)
+        self.precise_search = QCheckBox("Nur exakte Carl-Eichhorn-Lieferscheinnummer")
+        self.precise_search.setChecked(True)
+        self.precise_search.setToolTip(
+            "Ein Treffer zählt nur, wenn CARL EICHHORN und die gesuchte Nummer direkt hinter Lieferschein-Nr. erkannt wurden."
+        )
+        self.precise_search.toggled.connect(self._search)
+        main.addWidget(self.precise_search)
 
         self.results = QTreeWidget()
         self.results.setColumnCount(4)
@@ -232,6 +239,7 @@ class MainWindow(QMainWindow):
         self.folder_edit.setText(self.settings.pdf_folder)
         self.subfolders.setChecked(self.settings.include_subfolders)
         self.watch.setChecked(self.settings.watch_folder)
+        self.precise_search.setChecked(self.settings.precise_carl_eichhorn)
         QTimer.singleShot(0, self._configure_watcher)
 
     def _select_folder(self) -> None:
@@ -332,9 +340,19 @@ class MainWindow(QMainWindow):
     def _search(self) -> None:
         query = self.search_edit.text().strip()
         self.results.clear()
-        self.current_hits = self.database.search(query, normalize_search_text(query)) if query else []
+        self.current_hits = (
+            self.database.search(
+                query,
+                normalize_search_text(query),
+                precise_carl_eichhorn=self.precise_search.isChecked(),
+            )
+            if query
+            else []
+        )
         for index, hit in enumerate(self.current_hits):
             source = "OCR" if hit.ocr_used else "PDF-Text"
+            if hit.verified_delivery_number:
+                source = f"Exakt · {source}"
             item = QTreeWidgetItem([hit.filename, str(hit.page_number), hit.snippet, source])
             item.setData(0, Qt.ItemDataRole.UserRole, index)
             item.setToolTip(0, hit.path)
@@ -408,6 +426,7 @@ class MainWindow(QMainWindow):
         self.settings.pdf_folder = self.folder_edit.text().strip()
         self.settings.include_subfolders = self.subfolders.isChecked()
         self.settings.watch_folder = self.watch.isChecked()
+        self.settings.precise_carl_eichhorn = self.precise_search.isChecked()
         self.settings.window_width = self.width()
         self.settings.window_height = self.height()
         self.settings.save()

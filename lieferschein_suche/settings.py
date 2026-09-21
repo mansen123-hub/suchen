@@ -13,6 +13,7 @@ class AppSettings:
     include_subfolders: bool = True
     watch_folder: bool = True
     ocr_languages: str = "deu+eng"
+    precise_carl_eichhorn: bool = True
     window_width: int = 1380
     window_height: int = 860
 
@@ -32,4 +33,3 @@ class AppSettings:
         temporary = target.with_suffix(".tmp")
         temporary.write_text(json.dumps(asdict(self), ensure_ascii=False, indent=2), encoding="utf-8")
         temporary.replace(target)
-

@@ -2,7 +2,7 @@
 
 ## Lokal erfolgreich ausgeführt
 
-Stand: 16.09.2026, Quellversion 1.0.0
+Stand: 21.09.2026, Quellversion 1.2.0
 
 - Syntaxprüfung aller Python-Module
 - UI-Starttest mit Qt im Headless-Modus
@@ -15,11 +15,14 @@ Stand: 16.09.2026, Quellversion 1.0.0
 - erneuter Lauf ohne Änderungen (Datei wird übersprungen)
 - geänderte PDF (wird neu verarbeitet)
 - gelöschte PDF (wird aus dem Index entfernt)
-- 30 PDF-Dateien in einem Durchlauf
+- 30 PDF-Dateien in einem parallelen Durchlauf
 - Neustart bzw. erneutes Öffnen mit vorhandenem SQLite-Index
 - OCR-Hervorhebung über mehrere erkannte Wortsegmente
+- direkter Treffer über den indexierten Nummernspeicher ohne Volltext-Fallback
+- gezielte Aktualisierung und Löschung einzelner überwachten PDFs ohne Gesamt-Scan
+- paketierter Selbsttest für Multiprocessing, PDF-Auslesen, Datenbank und Suche
 
-Ergebnis: **8 automatisierte Tests erfolgreich**.
+Ergebnis: **10 automatisierte Tests erfolgreich**.
 
 ## Im Windows-Build automatisiert
 
@@ -43,4 +46,3 @@ Die Datei `.github/workflows/windows-installer.yml` führt zusätzlich auf einem
 - Update von Version 1.0.0 auf eine spätere Testversion
 
 Hinweis: Code Signing ist bewusst nicht vorgetäuscht. Für eine unternehmensweite Verteilung sollte der Installer mit einem vertrauenswürdigen Code-Signing-Zertifikat signiert werden.
-

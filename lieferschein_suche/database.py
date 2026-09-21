@@ -17,6 +17,7 @@ class SearchHit:
     ocr_used: bool
     modified_ns: int
     query: str
+    verified_delivery_number: bool = False
 
 
 class IndexDatabase:
@@ -178,7 +179,13 @@ class IndexDatabase:
             errors = conn.execute("SELECT COUNT(*) FROM documents WHERE error IS NOT NULL").fetchone()[0]
             return docs, pages, errors
 
-    def search(self, query: str, normalized_query: str, limit: int = 500) -> list[SearchHit]:
+    def search(
+        self,
+        query: str,
+        normalized_query: str,
+        limit: int = 500,
+        precise_carl_eichhorn: bool = False,
+    ) -> list[SearchHit]:
         if not normalized_query:
             return []
         indexed_sql = """
@@ -204,11 +211,15 @@ class IndexDatabase:
                 escaped = normalized_query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
                 rows = conn.execute(fallback_sql, (f"%{escaped}%", limit)).fetchall()
             for row in rows:
+                verified = _is_carl_eichhorn(row["text"]) and normalized_query in _delivery_note_numbers(row["text"])
+                if precise_carl_eichhorn and not verified:
+                    continue
                 hits.append(
                     SearchHit(
                         path=row["path"], filename=row["filename"], page_number=row["page_number"],
                         snippet=_snippet(row["text"], query), ocr_used=bool(row["ocr_used"]),
                         modified_ns=row["modified_ns"], query=query,
+                        verified_delivery_number=verified,
                     )
                 )
         return hits
@@ -249,3 +260,31 @@ def _number_tokens(text: str) -> set[str]:
         if 5 <= len(value) <= 48 and sum(character.isdigit() for character in value) >= 3:
             tokens.add(value)
     return tokens
+
+
+_DELIVERY_NUMBER_PATTERN = re.compile(
+    r"liefer\s*schein\s*[-.:/]?\s*(?:nr|nummer)\s*[-.:#]*\s*([0-9][0-9\s./-]{2,20})",
+    re.IGNORECASE,
+)
+
+
+def _delivery_note_numbers(text: str) -> set[str]:
+    """Return only numbers explicitly assigned to a Lieferschein-Nr. label."""
+    numbers: set[str] = set()
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        matches = list(_DELIVERY_NUMBER_PATTERN.finditer(line))
+        # Some PDF text layers place the value in a separate column/line.
+        if not matches and index + 1 < len(lines):
+            matches = list(_DELIVERY_NUMBER_PATTERN.finditer(f"{line} {lines[index + 1]}"))
+        for match in matches:
+            value = "".join(character for character in match.group(1) if character.isdigit())
+            if 4 <= len(value) <= 12:
+                numbers.add(value)
+    return numbers
+
+
+def _is_carl_eichhorn(text: str) -> bool:
+    compact = re.sub(r"[^a-z0-9]+", "", text.casefold())
+    # Tolerate the common OCR substitution O -> 0 in EICHHORN.
+    return bool(re.search(r"eichh[o0]rn", compact)) and ("carl" in compact or "wellpappen" in compact)

@@ -1,4 +1,4 @@
-# Lieferschein-Suche
+# Lieferschein-Suche 1.2
 
 Lokale Windows-Desktop-Anwendung zum Indexieren und Durchsuchen von PDF-Lieferscheinen. Text-PDFs werden direkt ausgelesen; reine Scan-PDFs werden automatisch und ausschließlich lokal mit dem mitgelieferten Tesseract-OCR verarbeitet.
 
@@ -13,6 +13,26 @@ Lokale Windows-Desktop-Anwendung zum Indexieren und Durchsuchen von PDF-Liefersc
 - Öffnen der PDF bzw. des Speicherorts im Explorer
 - Fortschritt, Abbruch, Fehlerprotokoll und kompletter Neuaufbau
 - keine Cloud-Übertragung
+
+## Für sehr große PDF-Bestände optimiert
+
+Version 1.2 ist für Bestände mit mehr als 100.000 PDFs ausgelegt und bietet zusätzlich eine präzise Carl-Eichhorn-Suche:
+
+- Standardmäßig zählen nur exakte Übereinstimmungen zwischen Palettenkonto-Belegnummer und dem Feld `Lieferschein-Nr.`.
+- Das Dokument muss als Carl-Eichhorn-Lieferschein erkannt werden.
+- Andere Zahlen wie Datum, Kunden-Nr. oder `Unsere Lief.-Nr. 70124` werden nicht als Treffer ausgegeben.
+- Die präzise Einschränkung kann für eine erweiterte Suche abgeschaltet werden.
+
+- parallele PDF-Verarbeitung mit automatisch 2–8 Prozessen
+- Tesseract je Prozess auf einen CPU-Thread begrenzt, damit der Rechner ansprechbar bleibt
+- schnelle Dateierfassung über `scandir` ohne doppelten Metadatenzugriff
+- gebündelte SQLite-Transaktionen statt eines Schreibvorgangs pro PDF
+- eigener indexierter Nummernspeicher für sofortige Lieferscheinsuchen
+- Anzeige von Durchsatz und geschätzter Restzeit
+- Fortsetzen nach Abbruch oder Neustart durch den dauerhaften Zwischenstand
+- Dateiüberwachung verarbeitet ausschließlich betroffene PDFs statt den Gesamtordner erneut zu scannen
+
+Für die erste Indexierung eines sehr großen Bestands sollte der PDF-Ordner möglichst auf einer lokalen SSD liegen. Danach werden nur neue oder geänderte Dateien verarbeitet.
 
 ## Entwicklung
 
@@ -43,4 +63,3 @@ Ein normaler Endbenutzer benötigt weder Python noch Tesseract noch weitere Lauf
 ## Datenschutz
 
 Die Anwendung enthält keine Netzwerk- oder Telemetrie-Funktion. PDFs, extrahierter Text, OCR-Daten, Einstellungen und Protokolle bleiben unter `%LOCALAPPDATA%\LieferscheinSuche` auf dem jeweiligen Rechner.
-

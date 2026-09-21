@@ -133,3 +133,35 @@ def test_targeted_update_does_not_rescan_folder(tmp_path: Path) -> None:
     assert result.processed == 1
     assert database.search("TARGET-30003", normalize_search_text("TARGET-30003"))
     assert not database.search("TARGET-10001", normalize_search_text("TARGET-10001"))
+
+
+def test_precise_carl_eichhorn_search_only_matches_delivery_number(tmp_path: Path) -> None:
+    pdf = tmp_path / "Carl Eichhorn Lieferschein.pdf"
+    create_pdf(
+        pdf,
+        [
+            "CARL EICHHORN KG Wellpappenwerke\n"
+            "Lieferschein/Kopie Spediteur Seite 1/2\n"
+            "Lieferschein-Nr.: 7238842\n"
+            "Datum: 17.08.2026\n"
+            "Kunden-Nr.: 102165-000\n"
+            "Unsere Lief.-Nr.: 70124"
+        ],
+    )
+    database = IndexDatabase(tmp_path / "precise.sqlite3")
+    PdfIndexer(database, workers=2).run(tmp_path, recursive=False)
+
+    exact = database.search("7238842", "7238842", precise_carl_eichhorn=True)
+    assert len(exact) == 1
+    assert exact[0].verified_delivery_number
+    assert not database.search("70124", "70124", precise_carl_eichhorn=True)
+    assert database.search("70124", "70124", precise_carl_eichhorn=False)
+
+
+def test_precise_search_rejects_same_number_from_another_supplier(tmp_path: Path) -> None:
+    pdf = tmp_path / "other.pdf"
+    create_pdf(pdf, ["ANDERER LIEFERANT GmbH\nLieferschein-Nr.: 7238842\nWeitere Angaben zum Auftrag"])
+    database = IndexDatabase(tmp_path / "other.sqlite3")
+    PdfIndexer(database, workers=2).run(tmp_path, recursive=False)
+
+    assert not database.search("7238842", "7238842", precise_carl_eichhorn=True)
